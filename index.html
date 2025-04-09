@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Crawler & Search Engine</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 20px;
+            padding-bottom: 50px;
+        }
+        
+        .crawl-controls {
+            margin-bottom: 20px;
+        }
+        
+        .progress {
+            height: 30px;
+            margin-bottom: 15px;
+        }
+        
+        .crawl-stats {
+            margin-top: 30px;
+        }
+        
+        #search-results .card-title {
+            margin-bottom: 0.25rem;
+        }
+        
+        .crawler-section, .search-section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+        
+        .search-container {
+            margin-top: 30px;
+        }
+        
+        .navbar-brand img {
+            margin-right: 8px;
+        }
+        
+        strong {
+            background-color: #ffffc7;
+            font-weight: bold;
+        }
+        
+        .starter-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .starter-link {
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        
+        .starter-link:hover {
+            background-color: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar navbar-light bg-light mb-4 rounded">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">
+                    <img src="https://api.dicebear.com/7.x/bottts/svg?seed=samantha" width="30" height="30" class="d-inline-block align-top" alt="">
+                    rankPage by Samantha the AI
+                </a>
+            </div>
+        </nav>
+        
+        <!-- Main App UI -->
+        <div class="row">
+            <!-- Crawler Section -->
+            <div class="col-md-6">
+                <div class="crawler-section">
+                    <h2>Web Crawler</h2>
+                    
+                    <!-- Crawl Form -->
+                    <div class="crawl-controls">
+                        <div class="mb-3">
+                            <label for="start-url" class="form-label">Start URL</label>
+                            <input type="url" class="form-control" id="start-url" placeholder="https://example.com">
+                            
+                            <div class="starter-links">
+                                <div class="text-muted mb-1">Start with:</div>
+                                <div id="starter-links-container"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col">
+                                <label for="max-depth" class="form-label">Max Depth</label>
+                                <input type="number" class="form-control" id="max-depth" value="3" min="1" max="10">
+                            </div>
+                            <div class="col">
+                                <label for="max-pages" class="form-label">Max Pages</label>
+                                <input type="number" class="form-control" id="max-pages" value="100" min="1" max="1000">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="restrict-domain" checked>
+                            <label class="form-check-label" for="restrict-domain">Stay on same domain</label>
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex">
+                            <button id="crawl-button" class="btn btn-primary">Start Crawling</button>
+                            <button id="stop-button" class="btn btn-danger" disabled>Stop</button>
+                            <button id="save-button" class="btn btn-secondary">Save Data</button>
+                            <button id="load-button" class="btn btn-secondary">Load Data</button>
+                            <button id="export-button" class="btn btn-secondary">Export Data</button>
+                            <button id="import-button" class="btn btn-secondary">Import Data</button>
+                            <button id="clear-button" class="btn btn-warning">Clear Data</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Crawl Progress -->
+                    <div class="progress">
+                        <div id="crawl-progress" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                    
+                    <div id="progress-text" class="text-center mb-3">
+                        Crawled: 0 | Processing: 0 | Failed: 0
+                    </div>
+                    
+                    <div id="status-message" class="text-muted"></div>
+                </div>
+            </div>
+            
+            <!-- Search Section -->
+            <div class="col-md-6">
+                <div class="search-section">
+                    <h2>Search Engine</h2>
+                    
+                    <!-- Search Form -->
+                    <form id="search-form" class="mb-4">
+                        <div class="input-group mb-3">
+                            <input type="text" id="search-input" class="form-control" placeholder="Search crawled pages..." aria-label="Search term">
+                            <button class="btn btn-success" type="submit">Search</button>
+                        </div>
+                    </form>
+                    
+                    <!-- Search Results -->
+                    <div id="search-results" class="mt-3">
+                        <div class="alert alert-info">
+                            Enter a search query above to find content in crawled pages.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Statistics -->
+        <div id="stats-container" class="crawl-stats mt-4">
+            <div class="alert alert-info">
+                No pages have been crawled yet. Start crawling to see statistics.
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global state
+        let pages = [];
+        let pageIndex = {};
+        let crawledUrls = new Set();
+        let processingUrls = new Set();
+        let failedUrls = new Set();
+        let urlQueue = [];
+        let isCrawling = false;
+        let maxDepth = 3;
+        let maxPages = 100;
+        let restrictDomain = true;
+        
+        // Default starter links
+        const starterLinks = [
+            "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+            "https://developer.mozilla.org/en-US/docs/Web/CSS",
+            "https://developer.mozilla.org/en-US/docs/Web/HTML",
+            "https://wikipedia.org",
+            "https://nodemixaholic.com/index-notabot.html",
+            "https://nodemixaholic.com/log/index-notabot.html",
+            "http://wklord.com/index.html",
+            "https://kernel.org",
+            "https://gnu.org",
+            "https://linuxmint.com",
+            "https://fedoraproject.org",
+            "https://bazzite.gg",
+            "https://www.openmandriva.org/"
+        ];
+        
+        // Populate starter links
+        function populateStarterLinks() {
+            const container = document.getElementById('starter-links-container');
+            
+            starterLinks.forEach(link => {
+                const linkElement = document.createElement('span');
+                linkElement.className = 'starter-link';
+                
+                // Create shortened version for display
+                let displayUrl = link.replace(/^https?:\/\//, '');
+                if (displayUrl.length > 25) {
+                    displayUrl = displayUrl.substring(0, 22) + '...';
+                }
+                
+                linkElement.textContent = displayUrl;
+                linkElement.title = link;
+                
+                linkElement.addEventListener('click', () => {
+                    document.getElementById('start-url').value = link;
+                });
+                
+                container.appendChild(linkElement);
+            });
+        }
+        
+        // Crawl a URL
+        async function crawlUrl(url, depth = 0) {
+            try {
+                // Skip if already crawled or currently processing
+                if (crawledUrls.has(url) || processingUrls.has(url)) {
+                    return;
+                }
+                
+                // Skip if max depth exceeded
+                if (depth > maxDepth) {
+                    return;
+                }
+                
+                // Skip if max pages reached
+                if (crawledUrls.size >= maxPages) {
+                    return;
+                }
+                
+                // Mark as processing
+                processingUrls.add(url);
+                updateProgressUI();
+                
+                // Use a proxy server to fetch the URL content
+                // This helps bypass CORS issues in the browser
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                
+                const response = await fetch(proxyUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // If no content, treat as failed
+                if (!data.contents) {
+                    throw new Error('No content returned from proxy');
+                }
+                
+                // Create a DOM parser to parse the HTML
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(data.contents, 'text/html');
+                
+                // Extract page data
+                const title = doc.querySelector('title')?.textContent || url;
+                const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+                const content = doc.body?.textContent.trim() || '';
+                
+                // Word count
+                const wordCount = content.split(/\s+/).filter(w => w.length > 0).length;
+                
+                // Extract links
+                const links = [];
+                const linkElements = doc.querySelectorAll('a[href]');
+                
+                linkElements.forEach(link => {
+                    let href = link.getAttribute('href');
+                    
+                    // Skip empty links, javascript: links, and anchors
+                    if (!href || href.startsWith('javascript:') || href === '#') {
+                        return;
+                    }
+                    
+                    try {
+                        // Convert relative URLs to absolute
+                        const absoluteUrl = new URL(href, url).href;
+                        
+                        // Skip if not http/https
+                        if (!absoluteUrl.startsWith('http')) {
+                            return;
+                        }
+                        
+                                                // Skip if restrict domain is enabled and domain doesn't match
+                                                if (restrictDomain) {
+                            const urlDomain = new URL(url).hostname;
+                            const linkDomain = new URL(absoluteUrl).hostname;
+                            
+                            if (urlDomain !== linkDomain) {
+                                return;
+                            }
+                        }
+                        
+                        // Add to links
+                        links.push({
+                            url: absoluteUrl,
+                            text: link.textContent.trim()
+                        });
+                        
+                        // Add to queue if we haven't crawled it yet
+                        if (!crawledUrls.has(absoluteUrl) && !processingUrls.has(absoluteUrl) && !urlQueue.includes(absoluteUrl)) {
+                            urlQueue.push({
+                                url: absoluteUrl,
+                                depth: depth + 1
+                            });
+                        }
+                    } catch (e) {
+                        // Invalid URL, skip
+                    }
+                });
+                
+                // Create page object
+                const page = {
+                    url,
+                    title,
+                    description,
+                    content,
+                    links,
+                    wordCount,
+                    crawlTime: new Date().toISOString(),
+                    depth,
+                    rank: 1 // Default rank, will be updated later
+                };
+                
+                // Add to page index and crawled set
+                pages.push(page);
+                pageIndex[url] = page;
+                crawledUrls.add(url);
+                processingUrls.delete(url);
+                
+                // Update UI
+                updateStats();
+                updateProgressUI();
+                
+                console.log(`Crawled: ${url} - Added ${links.length} links to queue.`);
+                
+                return page;
+            } catch (error) {
+                console.error(`Error crawling ${url}:`, error);
+                
+                // Mark as failed
+                processingUrls.delete(url);
+                failedUrls.add(url);
+                
+                // Update UI
+                updateProgressUI();
+                
+                return null;
+            }
+        }
+        
+        // Start crawling process
+        async function startCrawling() {
+            // Check if already crawling
+            if (isCrawling) {
+                return;
+            }
+            
+            // Get values from form
+            const startUrl = document.getElementById('start-url').value.trim();
+            maxDepth = parseInt(document.getElementById('max-depth').value) || 3;
+            maxPages = parseInt(document.getElementById('max-pages').value) || 100;
+            restrictDomain = document.getElementById('restrict-domain').checked;
+            
+            // Validate URL
+            if (!startUrl) {
+                console.log('Please enter a valid URL to start crawling.', 3000, 'danger');
+                return;
+            }
+            
+            try {
+                // Test if valid URL
+                new URL(startUrl);
+            } catch (e) {
+                console.log('Invalid URL. Please enter a valid URL with protocol (http:// or https://).', 3000, 'danger');
+                return;
+            }
+            
+            // Reset state
+            isCrawling = true;
+            if (!confirm('This will clear any existing crawl data. Continue?')) {
+                isCrawling = false;
+                return;
+            }
+            
+            pages = [];
+            pageIndex = {};
+            crawledUrls.clear();
+            processingUrls.clear();
+            failedUrls.clear();
+            urlQueue = [];
+            
+            // Update UI
+            document.getElementById('crawl-button').disabled = true;
+            document.getElementById('stop-button').disabled = false;
+            updateStats();
+            updateProgressUI();
+            
+            // Start with initial URL
+            urlQueue.push({ url: startUrl, depth: 0 });
+            
+            console.log(`Starting crawl from ${startUrl}...`);
+            
+                        // Main crawl loop
+                        while (urlQueue.length > 0 && isCrawling && crawledUrls.size < maxPages) {
+                const { url, depth } = urlQueue.shift();
+                
+                // Skip if already crawled
+                if (crawledUrls.has(url)) {
+                    continue;
+                }
+                
+                // Process the URL
+                await crawlUrl(url, depth);
+                
+                // Add some throttling to be nice to servers
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+            // Calculate PageRank
+            if (isCrawling && pages.length > 0) {
+                calculatePageRank();
+            }
+            
+            // Finish crawling
+            isCrawling = false;
+            document.getElementById('crawl-button').disabled = false;
+            document.getElementById('stop-button').disabled = true;
+            
+            console.log(`Crawling complete! Crawled ${crawledUrls.size} pages, ${failedUrls.size} failed.`);
+            updateProgressUI();
+        }
+        
+        // Stop the crawling process
+        function stopCrawl() {
+            isCrawling = false;
+            document.getElementById('crawl-button').disabled = false;
+            document.getElementById('stop-button').disabled = true;
+            console.log('Crawling stopped by user.');
+        }
+        
+        // Calculate PageRank for all pages
+        function calculatePageRank(iterations = 20) {
+            console.log('Calculating PageRank...');
+            
+            // Build link graph
+            const linkGraph = {};
+            const dampingFactor = 0.85;
+            
+            // Initialize ranks
+            pages.forEach(page => {
+                linkGraph[page.url] = {
+                    outboundLinks: page.links.map(link => link.url).filter(url => crawledUrls.has(url)),
+                    rank: 1
+                };
+            });
+            
+            // Iterative PageRank calculation
+            for (let i = 0; i < iterations; i++) {
+                const newRanks = {};
+                
+                // Calculate new ranks
+                Object.keys(linkGraph).forEach(url => {
+                    // Start with base probability
+                    newRanks[url] = (1 - dampingFactor);
+                    
+                    // Add link juice from inbound links
+                    Object.entries(linkGraph).forEach(([sourceUrl, sourceData]) => {
+                        if (sourceData.outboundLinks.includes(url)) {
+                            // Distribute rank evenly among outbound links
+                            const outboundCount = sourceData.outboundLinks.length;
+                            if (outboundCount > 0) {
+                                newRanks[url] += dampingFactor * (linkGraph[sourceUrl].rank / outboundCount);
+                            }
+                        }
+                    });
+                });
+                
+                // Update ranks
+                Object.keys(linkGraph).forEach(url => {
+                    linkGraph[url].rank = newRanks[url];
+                });
+            }
+            
+            // Update page ranks
+            pages.forEach(page => {
+                if (linkGraph[page.url]) {
+                    page.rank = linkGraph[page.url].rank;
+                }
+            });
+            
+            console.log('PageRank calculation complete.');
+            updateStats();
+        }
+        
+        // Search function
+        function search(query) {
+            query = query.toLowerCase().trim();
+            
+            // Tokenize query
+            const queryTerms = query.split(/\s+/)
+                .filter(term => term.length > 0)
+                .map(term => term.toLowerCase());
+            
+            // Skip empty queries
+            if (queryTerms.length === 0) {
+                return {
+                    query,
+                    count: 0,
+                    results: []
+                };
+            }
+            
+            // Find matching pages
+            const results = pages
+                .map(page => {
+                                        // Search in title, content, and URL
+                                        const title = page.title ? page.title.toLowerCase() : '';
+                    const content = page.content ? page.content.toLowerCase() : '';
+                    const url = page.url.toLowerCase();
+                    
+                    // Count term matches
+                    let matchScore = 0;
+                    const matches = {};
+                    
+                    // Check each term
+                    queryTerms.forEach(term => {
+                        // Title matches (worth 10 points)
+                        const titleMatches = (title.match(new RegExp(term, 'gi')) || []).length;
+                        matchScore += titleMatches * 10;
+                        
+                        // URL matches (worth 5 points)
+                        const urlMatches = (url.match(new RegExp(term, 'gi')) || []).length;
+                        matchScore += urlMatches * 5;
+                        
+                        // Content matches (worth 1 point each)
+                        const contentMatches = (content.match(new RegExp(term, 'gi')) || []).length;
+                        matchScore += contentMatches;
+                        
+                        // Total term matches
+                        matches[term] = titleMatches + urlMatches + contentMatches;
+                    });
+                    
+                    // Calculate relevance score (combination of matches and PageRank)
+                    const relevanceScore = matchScore * page.rank;
+                    
+                    // Generate snippets with highlighting
+                    let snippet = '';
+                    
+                    if (content) {
+                        // Find a section of content with most matches
+                        const snippetLength = 200;
+                        let bestSnippetScore = 0;
+                        let bestSnippetPosition = 0;
+                        
+                        // Slide a window through the content to find best match density
+                        for (let i = 0; i < content.length - snippetLength; i += 50) {
+                            const section = content.substring(i, i + snippetLength);
+                            let sectionScore = 0;
+                            
+                            queryTerms.forEach(term => {
+                                sectionScore += (section.match(new RegExp(term, 'gi')) || []).length;
+                            });
+                            
+                            if (sectionScore > bestSnippetScore) {
+                                bestSnippetScore = sectionScore;
+                                bestSnippetPosition = i;
+                            }
+                        }
+                        
+                        // Extract snippet
+                        snippet = content.substring(
+                            bestSnippetPosition,
+                            bestSnippetPosition + snippetLength
+                        );
+                        
+                        // Add ellipsis if we're not at the beginning/end
+                        if (bestSnippetPosition > 0) {
+                            snippet = '...' + snippet;
+                        }
+                        
+                        if (bestSnippetPosition + snippetLength < content.length) {
+                            snippet += '...';
+                        }
+                    }
+                    
+                    return {
+                        page,
+                        matchScore,
+                        relevanceScore,
+                        matches,
+                        snippet,
+                        hasMatches: matchScore > 0
+                    };
+                })
+                .filter(result => result.hasMatches)
+                .sort((a, b) => b.relevanceScore - a.relevanceScore);
+            
+            return {
+                query,
+                count: results.length,
+                results
+            };
+        }
+        
+        // Highlight the search terms in a text
+        function highlightTerms(text, terms) {
+            if (!text) return '';
+            
+            let highlighted = text;
+            
+            // Replace each term with a highlighted version
+            terms.forEach(term => {
+                const regex = new RegExp(`(${term})`, 'gi');
+                highlighted = highlighted.replace(regex, '<strong>$1</strong>');
+            });
+            
+            return highlighted;
+        }
+        
+        // Display search results
+        function displaySearchResults(searchResults, container) {
+            const { query, count, results } = searchResults;
+            
+                        // Format query terms for highlighting
+                        const terms = query.split(/\s+/).filter(term => term.length > 0);
+            
+            // Clear container
+            container.innerHTML = '';
+            
+            // Show result count
+            const countElement = document.createElement('div');
+            countElement.className = 'mb-3 mt-3';
+            countElement.innerHTML = `<strong>${count}</strong> results found for: <em>${query}</em>`;
+            container.appendChild(countElement);
+            
+            if (count === 0) {
+                const noResults = document.createElement('div');
+                noResults.className = 'alert alert-warning';
+                noResults.textContent = 'No matching pages found. Try a different search term or crawl more pages.';
+                container.appendChild(noResults);
+                return;
+            }
+            
+            // Create results list
+            results.forEach((result, index) => {
+                const { page, relevanceScore, snippet } = result;
+                
+                // Create card for the result
+                const card = document.createElement('div');
+                card.className = 'card mb-3';
+                
+                // Create card body
+                const cardBody = document.createElement('div');
+                cardBody.className = 'card-body';
+                
+                // Add title with link
+                const title = document.createElement('h5');
+                title.className = 'card-title';
+                
+                const titleLink = document.createElement('a');
+                titleLink.href = page.url;
+                titleLink.target = '_blank';
+                titleLink.innerHTML = highlightTerms(page.title || page.url, terms);
+                
+                title.appendChild(titleLink);
+                cardBody.appendChild(title);
+                
+                // Add URL
+                const urlText = document.createElement('div');
+                urlText.className = 'card-subtitle mb-2 text-muted small';
+                urlText.textContent = page.url;
+                cardBody.appendChild(urlText);
+                
+                // Add snippet
+                if (snippet) {
+                    const snippetElement = document.createElement('p');
+                    snippetElement.className = 'card-text';
+                    snippetElement.innerHTML = highlightTerms(snippet, terms);
+                    cardBody.appendChild(snippetElement);
+                }
+                
+                // Add metadata
+                const meta = document.createElement('div');
+                meta.className = 'small text-muted d-flex justify-content-between';
+                
+                const pageInfo = document.createElement('span');
+                pageInfo.textContent = `Depth: ${page.depth} | WordCount: ${page.wordCount} | PageRank: ${page.rank.toFixed(4)}`;
+                meta.appendChild(pageInfo);
+                
+                const scoreInfo = document.createElement('span');
+                scoreInfo.textContent = `Score: ${relevanceScore.toFixed(2)}`;
+                meta.appendChild(scoreInfo);
+                
+                cardBody.appendChild(meta);
+                
+                // Add card to container
+                card.appendChild(cardBody);
+                container.appendChild(card);
+            });
+        }
+        
+        // Update the statistics UI
+        function updateStats() {
+            const container = document.getElementById('stats-container');
+            
+            if (pages.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-info">
+                        No pages have been crawled yet. Start crawling to see statistics.
+                    </div>
+                `;
+                return;
+            }
+            
+            // Calculate statistics
+            const totalPages = pages.length;
+            const totalLinks = pages.reduce((sum, page) => sum + page.links.length, 0);
+            const totalWords = pages.reduce((sum, page) => sum + page.wordCount, 0);
+            const avgWords = totalWords / totalPages;
+            const avgLinks = totalLinks / totalPages;
+            
+            // Get top pages by PageRank
+            const topPages = [...pages]
+                .sort((a, b) => b.rank - a.rank)
+                .slice(0, 5);
+            
+            // Generate HTML
+            let html = `
+                                <h3>Crawler Statistics</h3>
+                
+                <div class="row stats-row">
+                    <div class="col-md-3">
+                        <div class="card text-center mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">${totalPages}</h5>
+                                <p class="card-text">Pages Crawled</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="card text-center mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">${totalLinks}</h5>
+                                <p class="card-text">Links Discovered</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="card text-center mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">${avgLinks.toFixed(1)}</h5>
+                                <p class="card-text">Avg. Links/Page</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="card text-center mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">${avgWords.toFixed(0)}</h5>
+                                <p class="card-text">Avg. Words/Page</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h4>Top Pages by PageRank</h4>
+                <div class="list-group mb-4">
+            `;
+            
+            // Add top pages
+            topPages.forEach(page => {
+                html += `
+                    <a href="${page.url}" target="_blank" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">${page.title || 'Untitled'}</h5>
+                            <small>Rank: ${page.rank.toFixed(4)}</small>
+                        </div>
+                        <p class="mb-1">${page.description || 'No description'}</p>
+                        <small>${page.url}</small>
+                    </a>
+                `;
+            });
+            
+            html += '</div>';
+            
+            container.innerHTML = html;
+        }
+        
+        // Update the progress UI
+        function updateProgressUI() {
+            const crawled = crawledUrls.size;
+            const processing = processingUrls.size;
+            const failed = failedUrls.size;
+            const total = crawled + processing + failed;
+            
+            // Update progress bar
+            const progressBar = document.getElementById('crawl-progress');
+            
+            if (maxPages > 0 && total > 0) {
+                const percentage = Math.min(100, Math.round((crawled / maxPages) * 100));
+                progressBar.style.width = `${percentage}%`;
+                progressBar.setAttribute('aria-valuenow', percentage);
+                progressBar.textContent = `${percentage}%`;
+            } else {
+                progressBar.style.width = '0%';
+                progressBar.setAttribute('aria-valuenow', 0);
+                progressBar.textContent = '0%';
+            }
+            
+            // Update text
+            document.getElementById('progress-text').textContent = 
+                `Crawled: ${crawled} | Processing: ${processing} | Failed: ${failed}`;
+        }
+        
+        // Save current data to localStorage
+        function saveData() {
+            try {
+                const data = {
+                    pages,
+                    crawledUrls: Array.from(crawledUrls),
+                    failedUrls: Array.from(failedUrls),
+                    timestamp: new Date().toISOString()
+                };
+                
+                localStorage.setItem('searchEngineData', JSON.stringify(data));
+                console.log('Data saved to localStorage!', 2000, 'success');
+            } catch (error) {
+                console.error('Error saving data:', error);
+                console.log('Error saving data: ' + error.message, 3000, 'danger');
+            }
+        }
+        
+        // Load data from localStorage
+        function loadData() {
+            try {
+                const raw = localStorage.getItem('searchEngineData');
+                
+                if (!raw) {
+                    console.log('No saved data found!', 2000, 'warning');
+                    return false;
+                }
+                
+                const data = JSON.parse(raw);
+                
+                // Restore data
+                pages = data.pages;
+                pageIndex = {};
+                
+                // Rebuild index
+                pages.forEach(page => {
+                    pageIndex[page.url] = page;
+                });
+                
+                // Restore sets
+                crawledUrls = new Set(data.crawledUrls);
+                failedUrls = new Set(data.failedUrls);
+                
+                // Update UI
+                updateStats();
+                updateProgressUI();
+                
+                console.log(`Loaded ${pages.length} pages from saved data!`, 2000, 'success');
+                return true;
+            } catch (error) {
+                console.error('Error loading data:', error);
+                console.log('Error loading data: ' + error.message, 3000, 'danger');
+                return false;
+            }
+        }
+        
+        // Export data to a file
+        function exportData() {
+            try {
+                const data = {
+                    pages,
+                    crawledUrls: Array.from(crawledUrls),
+                    failedUrls: Array.from(failedUrls),
+                    timestamp: new Date().toISOString(),
+                    metadata: {
+                        version: '1.0',
+                        pageCount: pages.length,
+                        exportDate: new Date().toISOString()
+                    }
+                };
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `search-engine-data-${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                console.log('Data exported successfully!', 2000, 'success');
+            } catch (error) {
+                console.error('Error exporting data:', error);
+                console.log('Error exporting data: ' + error.message, 3000, 'danger');
+            }
+        }
+        
+        // Import data from a file
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            
+            input.onchange = async (e) => {
+                try {
+                    const file = e.target.files[0];
+                    
+                    if (!file) {
+                        return;
+                    }
+                    
+                    console.log('Reading file...', 0, 'info');
+                    
+                    const text = await file.text();
+                    const data = JSON.parse(text);
+                    
+                    if (!data.pages || !Array.isArray(data.pages)) {
+                        throw new Error('Invalid data format: missing pages array');
+                    }
+                    
+                    // Restore data
+                    pages = data.pages;
+                    pageIndex = {};
+                    
+                                        // Rebuild index
+                                        pages.forEach(page => {
+                        pageIndex[page.url] = page;
+                    });
+                    
+                    // Restore sets
+                    crawledUrls = new Set(data.crawledUrls || []);
+                    failedUrls = new Set(data.failedUrls || []);
+                    
+                    // Update UI
+                    updateStats();
+                    updateProgressUI();
+                    
+                    console.log(`Imported ${pages.length} pages successfully!`, 2000, 'success');
+                } catch (error) {
+                    console.error('Error importing data:', error);
+                    console.log('Error importing data: ' + error.message, 3000, 'danger');
+                }
+            };
+            
+            input.click();
+        }
+        
+        // Initialize the application
+        function init() {
+            // Add event listeners to buttons
+            document.getElementById('crawl-button').addEventListener('click', startCrawling);
+            document.getElementById('stop-button').addEventListener('click', stopCrawl);
+            document.getElementById('save-button').addEventListener('click', saveData);
+            document.getElementById('load-button').addEventListener('click', loadData);
+            document.getElementById('export-button').addEventListener('click', exportData);
+            document.getElementById('import-button').addEventListener('click', importData);
+            
+            // Set up search form
+            const searchForm = document.getElementById('search-form');
+            const searchInput = document.getElementById('search-input');
+            const resultsContainer = document.getElementById('search-results');
+            
+            searchForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const query = searchInput.value.trim();
+                
+                if (query.length > 0) {
+                    const results = search(query);
+                    displaySearchResults(results, resultsContainer);
+                }
+            });
+            
+            // Load data if available
+            loadData();
+            
+            // Update status
+            console.log('Search engine initialized. Start crawling or load data to begin.');
+        }
+        
+        // Call init when DOM is ready
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
