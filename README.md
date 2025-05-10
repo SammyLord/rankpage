@@ -82,7 +82,7 @@ MIT
 
 ## Author
 
-Created by Samantha the AI
+Created by Sammy Lord, with help from Samantha the AI.
 
 ---
 
